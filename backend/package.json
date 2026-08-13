@@ -1,0 +1,19 @@
+{
+  "name": "sightpulse-backend",
+  "version": "1.0.0",
+  "description": "Geo-Location Based Attendance System with AI Security Verification API",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node src/index.js",
+    "seed": "node src/seed.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "jsonwebtoken": "^9.0.2",
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.0.0",
+    "ws": "^8.17.0"
+  }
+}
