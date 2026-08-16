@@ -1,6 +1,7 @@
 const db = require('../db/dbAdapter');
 const { validateStudentLocation } = require('../services/geofenceService');
 const anomalyEngine = require('../services/anomalyEngine');
+const { AppError } = require('../middleware/errorHandler');
 
 exports.getActiveSession = (req, res) => {
   try {
@@ -66,23 +67,19 @@ exports.endSession = (req, res) => {
   }
 };
 
-exports.verifyLocationAndMarkAttendance = (req, res) => {
+exports.verifyLocationAndMarkAttendance = (req, res, next) => {
   try {
     const studentId = req.user.id;
     const { sessionId, lat, lng, accuracy, bssid, seatRow, seatCol, seatLabel } = req.body;
 
-    if (!sessionId || lat === undefined || lng === undefined || !seatRow || !seatCol) {
-      return res.status(400).json({ error: 'Missing required parameters (sessionId, lat, lng, seatRow, seatCol)' });
-    }
-
-    const session = db.queryOne('SELECT * FROM attendance_sessions WHERE id = ? AND status = "ACTIVE"', [sessionId]);
+    const session = db.queryOne('SELECT * FROM attendance_sessions WHERE id = ? AND status = \'ACTIVE\'', [sessionId]);
     if (!session) {
-      return res.status(400).json({ error: 'Active session not found or class has ended' });
+      throw new AppError('Active session not found or class has ended', 400);
     }
 
     const classroom = db.queryOne('SELECT * FROM classrooms WHERE id = ?', [session.classroom_id]);
     if (!classroom) {
-      return res.status(404).json({ error: 'Classroom record not found' });
+      throw new AppError('Classroom record not found', 404);
     }
 
     // Check if student already checked into this session
@@ -91,7 +88,7 @@ exports.verifyLocationAndMarkAttendance = (req, res) => {
     // Check if seat is already occupied by someone else
     const occupiedSeat = db.queryOne('SELECT * FROM seat_attendance WHERE session_id = ? AND seat_row = ? AND seat_col = ? AND student_id != ?', [sessionId, seatRow, seatCol, studentId]);
     if (occupiedSeat) {
-      return res.status(409).json({ error: `Seat (${seatLabel || 'R' + seatRow + 'C' + seatCol}) is already selected by another student.` });
+      throw new AppError(`Seat (${seatLabel || 'R' + seatRow + 'C' + seatCol}) is already selected by another student.`, 409);
     }
 
     // Retrieve last attendance record for velocity spoof check
@@ -111,10 +108,7 @@ exports.verifyLocationAndMarkAttendance = (req, res) => {
     });
 
     if (!locValidation.isValid) {
-      return res.status(400).json({
-        error: 'Geofence location verification failed',
-        validationDetails: locValidation
-      });
+      throw new AppError('Geofence location verification failed', 400);
     }
 
     const attendanceId = existingCheckin ? existingCheckin.id : `att-${studentId}-${sessionId}`;
@@ -146,7 +140,7 @@ exports.verifyLocationAndMarkAttendance = (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };
 
