@@ -1,23 +1,21 @@
 const db = require('../db/dbAdapter');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { JWT_SECRET } = require('../middleware/authMiddleware');
+const { JWT_SECRET, JWT_EXPIRY } = require('../middleware/authMiddleware');
+const { AppError } = require('../middleware/errorHandler');
 
-exports.login = (req, res) => {
+exports.login = (req, res, next) => {
   try {
     const { email, password, deviceFingerprint } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
-    }
 
     const user = db.queryOne('SELECT * FROM users WHERE email = ?', [email]);
     if (!user) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      throw new AppError('Invalid credentials', 401);
     }
 
     const validPassword = bcrypt.compareSync(password, user.password_hash);
     if (!validPassword) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      throw new AppError('Invalid credentials', 401);
     }
 
     // Update device fingerprint if provided
@@ -28,7 +26,7 @@ exports.login = (req, res) => {
     const token = jwt.sign(
       { id: user.id, name: user.name, email: user.email, role: user.role },
       JWT_SECRET,
-      { expiresIn: '12h' }
+      { expiresIn: JWT_EXPIRY }
     );
 
     res.json({
@@ -42,18 +40,18 @@ exports.login = (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };
 
-exports.getMe = (req, res) => {
+exports.getMe = (req, res, next) => {
   try {
     const user = db.queryOne('SELECT id, name, email, role, device_fingerprint, created_at FROM users WHERE id = ?', [req.user.id]);
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      throw new AppError('User not found', 404);
     }
     res.json({ user });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };
